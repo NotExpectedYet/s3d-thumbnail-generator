@@ -8,20 +8,23 @@
 2. Edit the thumbnailGeneration.bash file with your working directory. (/tmp will work fine I just left mine in my user folder).
    `WORKINGDIR="<Your full system path here>"`
 
-3. Make sure to install xdotools and imagemagik(usually on your OS)
+3. You will need to figure out where to crop on your screen size. If your resolution is 1920x1080 then it should already work fine with the default settings. You'll have to play with these to figure out the best settings for your resolution otherwise.
+   `-crop 1583x792+285+32`
+
+4. Make sure to install xdotools and imagemagik(usually on your OS)
    `sudo apt-get install xdotool`
    `sudo apt install imagemagick`
 
-4. Open S3D and input the location of your script into the post-processing tab.
+5. Open S3D and input the location of your script into the post-processing tab.
    ![S3D Settings screentshot](s3dsettings.png "S3D Settings")
 
-5. Slice something and await the script to run. It currently adds 2 seconds onto the slice completion time as I found the script was a little too fast at generating the thumbnail. You can change this
+6. Slice something and await the script to run. It currently adds 2 seconds onto the slice completion time as I found the script was a little too fast at generating the thumbnail. You can change this
    `PAUSE="2"`
 
-6. Upload to your OctoPrint instance that has the PrusaThumbnail plugin installed.
+7. Upload to your OctoPrint instance that has the PrusaThumbnail plugin installed.
    `https://plugins.octoprint.org/plugins/prusaslicerthumbnails/`
 
-7. Profit!
+8. Profit!
    ![OctoFarm working with the plugin](profitScreenshot.jpg "OctoFarm working with the plugin")
 
-#### Notes: I want to make this better once I figure out cropping. I've also tried piping the STL to openSCAD as that would generate a much better thumbnail but currently S3D doesn't output the file path for the STL, only the gcode so unless there is something out there that generates an thumbnail from gcode the screenshot is the best way currently. I've come to like it because I can see all my supports on it but yeah, happy to accept PR's for anyone willing to make this better.
+#### Notes: I feel this works ok, although I'd rather generate the thumbnail with openSCAD currently S3D stops that due to having no [input_filename] variable like it does for the [output_filename]. I have noticed however some beneficts to having the gcode preview displayed rather than the actual model. For one, I know where my supports were but that will be user dependant and I do agree it would be nicer with a clean thumbnail similar to prusa/cura.

@@ -5,7 +5,9 @@
 WORKINGDIR="/home/s1mpleman/Scripts/"
 PAUSE="2"
 
-import -window -silent -pause ${PAUSE} "$(xdotool getwindowfocus -f)" "${WORKINGDIR}screenshot.png"
+import -window "$(xdotool getwindowfocus -f)" -silent -pause ${PAUSE} "${WORKINGDIR}screenshot.png"
+
+import -window "$(xdotool getwindowfocus -f)" -crop 1583x792+285+32 "${WORKINGDIR}screenshot.png"
 
 OUTPUT=$(base64 "${WORKINGDIR}screenshot.png")
 
