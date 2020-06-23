@@ -1,6 +1,6 @@
 ### S3D Thumbnail Generator for PrusaThumbnail plugin on OctoPrint.
 
-#### Linux only currently
+#### Basic Setup - Linux only currently
 
 1. Download and place the script on your system somewhere with permissions allowing S3D to access.
    `git clone https://github.com/NotExpectedYet/s3d-thumbnail-generator.git`
@@ -27,4 +27,37 @@
 8. Profit!
    ![OctoFarm working with the plugin](profitScreenshot.jpg "OctoFarm working with the plugin")
 
-#### Notes: I feel this works ok, although I'd rather generate the thumbnail with openSCAD currently S3D stops that due to having no [input_filename] variable like it does for the [output_filename]. I have noticed however some beneficts to having the gcode preview displayed rather than the actual model. For one, I know where my supports were but that will be user dependant and I do agree it would be nicer with a clean thumbnail similar to prusa/cura.
+##### Notes: I feel this works ok, although I'd rather generate the thumbnail with openSCAD currently S3D stops that due to having no [input_filename] variable like it does for the [output_filename]. I have noticed however some beneficts to having the gcode preview displayed rather than the actual model. For one, I know where my supports were but that will be user dependant and I do agree it would be nicer with a clean thumbnail similar to prusa/cura.
+
+#### Advanced Features
+
+V0.2 Introduces several new features including:
+
+* CAD style thumbnails using OpenSCAD (note limitations below)
+* Search External folder for thumbnail images
+* Hard code image (or stl to convert) in profile
+* Fallback to snapshot when above methods fail
+* Set default method in script, override per model in S3D
+* Debug option to write errors and info to a file, S3D will give you no feedback if it is working or not
+
+As mentioned above S3D does not passthrough the input file name, so if you choose to use CAD or an External folder the script has to guess the name of the STL file, it will do this by assuming the filename (without the extension) is the same for both the GCODE and the STL files, it will also require a directory to look. This means you need to be tidy with you models. If it finds the file it will process the file, if it cannot find it it will revert to taking a snapshot of the screen.
+
+#### Advanced Usage
+
+Place the following command in S3D as show in screenshot in Basic section, the full syntax is as follows:
+
+    /path/thumbnailGeneration.bash [ SNAP | SCAD | EXTERNAL | FILE "filename" ]
+
+**SNAP** [*Default*]
+This is the default option as specified by DEFAULT_THUMBNAIL, therefore you do not need to specifiy this option un less you have chnaged the default. This is the original screen snapshot thumbnail method
+
+**SCAD**
+Will attempt to find STL file and then use OpenSCAD to convert it. If it fails to find the file or the openSCAD binaries it will fall back to SNAP mode. You can specify the OpenSCAD details in the section for your platform within the script. The directory to look for STLs is specified with the script parameter STLDIR.
+
+**EXTERNAL**
+Will search the specified directory for an image and will use that image if found. This method doenst require installation of ImageMagick or OpenSCAD. But would require you to work out some method to create the images and then update the script with the relevant path. The parameter to update is PNGDIR, by default this points to STLDIR. Will fall back to SNAP if there is an issue.
+
+**FILE**
+This method allows you to pass a file directly from S3D. If the file is an STL the script will try to convert with OpenSCAD (like the SCAD option), if it is a PNG it will just copy it (like the EXTERNAL option)
+
+There are place holders in the script for Windows Platform, and option to convert GCODE to a PNG, but none of these are implmented.
