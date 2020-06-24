@@ -13,7 +13,7 @@ WORKINGDIR="/tmp/"
 DEFAULT_THUMBMETHOD="SNAP" #Methods SNAP, EXTERNAL, SCAD, GCODE, FILE
 STLDIR="$HOME/Work/3dprinting/Models"
 PNGDIR=$STLDIR	#if using externally generated pngs
-DEBUG_LOG="FALSE"  # debug ON if set to TRUE [TRUE|FALSE]
+DEBUG_LOG="TRUE"  # debug ON if set to TRUE [TRUE|FALSE]
 DEBUG_LOG_FILE="/tmp/debug.txt"
 
 # Set up Common Basic Parameters
@@ -23,6 +23,32 @@ THUMBFILE="$3"
 VERSION=0.2
 IAM=`basename $0`
 
+# Set up Parameters for snapshot
+PAUSE="2"
+CROPSIZE="600x400+600+140"  # crop a snapshot png, x size, y size, x offset, y offset
+
+# Set up Parameters for OpenSCAD - Linux
+case "$OSTYPE" in
+    darwin*)
+        #place holder for mac
+        #GETWINDOWID="$(xdotool getwindowfocus -f)"  #Get ID of S3D window so we can snapshot it
+        SCADBIN="/usr/local/bin/openscad" #Symlink, Assumes installed via Homebrew
+        #SCADLIB="/usr/lib/x86_64-linux-gnu" #openscad cant find libraries when run inside S3D
+        ;;
+    win32) #guess not sure
+        echo "not implemented" 
+        ;;
+    *)  #assume some form of Linux
+        GETWINDOWID="$(xdotool getwindowfocus -f)"  #Get ID of S3D window so we can snapshot it
+        SCADBIN="/usr/bin/openscad" #Full path of SCAD binary
+        SCADLIB="/usr/lib/x86_64-linux-gnu" #openscad cant find libraries when run inside S3D
+        ;;
+esac
+
+
+#################
+# Sanitu checks #
+#################
 # Check Parameter is not missing, this is the S3D [output_filepath] parameter
 if [ ! "$GCODEFILE" == "" ] 
 	then BASEFILE=$(basename "$GCODEFILE" | cut -d. -f1) 
@@ -38,16 +64,6 @@ else
 fi
 
 
-# Set up Parameters for snapshot
-PAUSE="2"
-CROPSIZE="600x400+600+140"  # crop a snapshot png, x size, y size, x offset, y offset
-GETWINDOWID="$(xdotool getwindowfocus -f)"  #Get ID of S3D window so we can snapshot it
-
-# Set up Parameters for OpenSCAD
-SCADBIN="/usr/bin/openscad" #Full path of SCAD binary
-SCADLIB="/usr/lib/x86_64-linux-gnu" #openscad cant find libraries when run inside S3D
-
-
 #######################
 # Define functions ####
 #######################
@@ -56,12 +72,20 @@ function fn_findfile    # Find a file in a given directory
 	# Param 1 = Filename to find without extension
 	# Param 2 = Filename extension
 	# Param 3 = Directory structure to search
+	# Param 4 = Case Sensitive [CASE | NOCASE]
 	fn_logdebug "Finding ...."
-	fn_logdebug "$3 ... $1 $2" 
-	fn_logdebug "Found ...." 
-	fn_logdebug "$(find $STLDIR -name "$1"."$2" -print -quit)" 
-    
-	echo $(find "$3" -name "$1"."$2" -print -quit)
+	fn_logdebug "$3 ... $1 | $2 | $4" 
+	
+	if [ $4 == "NOCASE" ]
+	then
+		fn_logdebug "Found ...." 
+		fn_logdebug "$(find "$3" -iname "$1"."$2" -print -quit)" 
+		echo $(find "$3" -iname "$1"."$2" -print -quit)
+	else
+		fn_logdebug "Found ...." 
+		fn_logdebug "$(find "$3" -name "$1"."$2" -print -quit)" 
+		echo $(find "$3" -name "$1"."$2" -print -quit)
+	fi
 }
 
 function fn_snapshot    # function to take screenshot
@@ -78,9 +102,15 @@ function fn_openscad    # function to take use openscad to create png from stl f
 	# Param 1 = stl file to convert
 	fn_logdebug "Using SCAD method ...." 
 	STLFILE="$1"
-	echo import\(\"$STLFILE\"\)\; >${WORKINGDIR}/${BASEFILE}.tmp
-	LD_LIBRARY_PATH=$SCADLIB
-	$SCADBIN -o ${WORKINGDIR}screenshot.png --imgsize=250,250 ${WORKINGDIR}/${BASEFILE}.tmp
+    if [ "$STLFILE" ]
+    then
+	    echo import\(\"$STLFILE\"\)\; >"${WORKINGDIR}/${BASEFILE}".tmp
+	    LD_LIBRARY_PATH=$SCADLIB
+	    $SCADBIN -o "${WORKINGDIR}screenshot.png" --imgsize=220,124 "${WORKINGDIR}/${BASEFILE}".tmp
+    else
+        fn_logdebug "Cannot find STL file, fallback to snapshot ...." 
+		fn_snapshot "${GETWINDOWID}" # No file was specified fallback to snapshot
+    fi
 }
 
 function fn_show_usage    # Display command line usage message and exit
@@ -113,17 +143,25 @@ fn_logdebug "$BASEFILE"
 # Select Option - Main Controller CASE statement
 case "$THUMBMETHOD" in
     SNAP)
+		# Take a snapshot of the S3D model window
         fn_snapshot "${GETWINDOWID}"
         ;;
     SCAD)
-        fn_openscad "$(fn_findfile $BASEFILE stl $STLDIR)"
+		# Use openSCAD to generate PNG from STL. Try to find filebased on GCODE name
+        GETFILENAME="$(fn_findfile """$BASEFILE""" stl """$STLDIR""" CASE)" 
+		# Failed to find exact file match with .stl postfix, try same search again case insensitive
+		: ${GETFILENAME:=$(fn_findfile """$BASEFILE""" stl """$STLDIR""" NOCASE)}
+		fn_logdebug "Filename being sent to openscad $GETFILENAME"
+		fn_openscad "$GETFILENAME"
         ;;      
     EXTERNAL)
+		# Look for png file with same name as gcode file in specified png directory
         fn_logdebug "Look for EXTERNAL" 
-	    PNGFILE="$(fn_findfile $BASEFILE png $PNGDIR)"
+	    PNGFILE="$(fn_findfile """$BASEFILE""" png """$PNGDIR""")"
 	    cp "${PNGFILE}" "${WORKINGDIR}screenshot.png"
         ;;
     FILE)
+		# Looks for user specified file
         if [ ! "${THUMBFILE}" ] ; then 
 		    fn_logdebug "FILE specified but filename parameter is null, fallback to snapshot ...." 
 		    fn_snapshot "${GETWINDOWID}" # No file was specified fallback to snapshot
@@ -133,9 +171,9 @@ case "$THUMBMETHOD" in
 	    else
 		    fn_logdebug "copying FILE" 
 		    FILEEXT=$(basename "$THUMBFILE" | cut -d. -f2) 
-		    if [ $FILEEXT == "stl" ] ; then
+		    if [ "$FILEEXT" == "stl" ] ; then
 		        fn_openscad "$THUMBFILE"
-		    elif [ $FILEEXT == "png" ] ; then
+		    elif [ "$FILEEXT" == "png" ] ; then
 		        cp "${THUMBFILE}" "${WORKINGDIR}screenshot.png"
 		    else
 		        fn_logdebug "Not sure what to do with this extension, giving up ...." 
@@ -145,11 +183,11 @@ case "$THUMBMETHOD" in
         ;;
     GCODE)
         echo "Not Implemented"
-        fn_logdebug"Not Implemented ...." 
+        fn_logdebug "Not Implemented ...." 
         ;;
     *)
         echo "Invalid Option"
-	    fn_logdebug"Invalid Option ...." 
+	    fn_logdebug "Invalid Option ...." 
         fn_show_usage 1
 esac
 
@@ -170,7 +208,8 @@ echo " thumbnail begin 220x124 24320" >> "${WORKINGDIR}base64.txt"   	#header
 echo "${OUTPUT}" >> "${WORKINGDIR}base64.txt"  							#dump ascii version of screenshot into file
 echo " thumbnail end" >> "${WORKINGDIR}base64.txt"  					#footer
 
-sed -i 's/^/;/' "${WORKINGDIR}base64.txt"								#Add gcode comment to ascii encoded lines
+# Empty quotes required for BSD/Mac sed compatability
+sed -i '' 's/^/;/' "${WORKINGDIR}base64.txt"								#Add gcode comment to ascii encoded lines
 
 fn_logdebug "Merging thumbnail into gcode ...." 
 
