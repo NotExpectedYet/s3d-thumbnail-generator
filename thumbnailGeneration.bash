@@ -26,6 +26,7 @@ IAM=`basename $0`
 # Set up Parameters for snapshot
 PAUSE="2"
 CROPSIZE="600x400+600+140"  # crop a snapshot png, x size, y size, x offset, y offset
+CROPSIZE_MAC="1500x1200+1100+300" # allow for people running multiple platform to snapshot different sizes
 
 # Set up Parameters for OpenSCAD - Linux
 case "$OSTYPE" in
@@ -33,15 +34,20 @@ case "$OSTYPE" in
         #place holder for mac
         #GETWINDOWID="$(xdotool getwindowfocus -f)"  #Get ID of S3D window so we can snapshot it
         SCADBIN="/usr/local/bin/openscad" #Symlink, Assumes installed via Homebrew
+		MYPLATFORM="MACOS"
+		SCREENSHOT="/usr/local/bin/screenshot" #Python commandline screenshot program
+		CONVERT="/usr/local/bin/convert"  #Imagemagick convert program for cropping
         #SCADLIB="/usr/lib/x86_64-linux-gnu" #openscad cant find libraries when run inside S3D
         ;;
     win32) #guess not sure
         echo "not implemented" 
+		MYPLATFORM="Windows"
         ;;
     *)  #assume some form of Linux
         GETWINDOWID="$(xdotool getwindowfocus -f)"  #Get ID of S3D window so we can snapshot it
         SCADBIN="/usr/bin/openscad" #Full path of SCAD binary
         SCADLIB="/usr/lib/x86_64-linux-gnu" #openscad cant find libraries when run inside S3D
+		MYPLATFORM="Linux"
         ;;
 esac
 
@@ -91,10 +97,17 @@ function fn_findfile    # Find a file in a given directory
 function fn_snapshot    # function to take screenshot
 {  
 	# Param 1 = xwindow id
-	fn_logdebug "Snapping ...." 
-	# Note this may fail if the user naviagates away from S3D to quickly
-	import -window "$1" -silent -pause ${PAUSE} "${WORKINGDIR}screenshot.png"
-	import -window "$1" -crop ${CROPSIZE} "${WORKINGDIR}screenshot.png"
+	fn_logdebug "Snapping .... $MYPLATFORM" 
+	if [ $MYPLATFORM == "MACOS" ]
+	then
+		#rm "${WORKINGDIR}screenshot.png" "${WORKINGDIR}screenshot_fullsize.png"
+		$SCREENSHOT Simplify3D -f "${WORKINGDIR}screenshot_fullsize.png" 
+		$CONVERT  "${WORKINGDIR}screenshot_fullsize.png" -crop ${CROPSIZE_MAC} "${WORKINGDIR}screenshot.png"
+	else
+		# Note this may fail if the user naviagates away from S3D to quickly
+		import -window "$1" -silent -pause ${PAUSE} "${WORKINGDIR}screenshot.png"
+		import -window "$1" -crop ${CROPSIZE} "${WORKINGDIR}screenshot.png"
+	fi
 }
 
 function fn_openscad    # function to take use openscad to create png from stl file
@@ -106,7 +119,7 @@ function fn_openscad    # function to take use openscad to create png from stl f
     then
 	    echo import\(\"$STLFILE\"\)\; >"${WORKINGDIR}/${BASEFILE}".tmp
 	    LD_LIBRARY_PATH=$SCADLIB
-	    $SCADBIN -o "${WORKINGDIR}screenshot.png" --imgsize=220,124 "${WORKINGDIR}/${BASEFILE}".tmp
+		$SCADBIN -o "${WORKINGDIR}screenshot.png" --imgsize=440,248 "${WORKINGDIR}/${BASEFILE}".tmp #standard res 220x124
     else
         fn_logdebug "Cannot find STL file, fallback to snapshot ...." 
 		fn_snapshot "${GETWINDOWID}" # No file was specified fallback to snapshot
@@ -208,8 +221,15 @@ echo " thumbnail begin 220x124 24320" >> "${WORKINGDIR}base64.txt"   	#header
 echo "${OUTPUT}" >> "${WORKINGDIR}base64.txt"  							#dump ascii version of screenshot into file
 echo " thumbnail end" >> "${WORKINGDIR}base64.txt"  					#footer
 
-# Empty quotes required for BSD/Mac sed compatability
-sed -i '' 's/^/;/' "${WORKINGDIR}base64.txt"								#Add gcode comment to ascii encoded lines
+
+if [ $MYPLATFORM == "MACOS" ]
+then
+	# Empty quotes required for BSD/Mac sed compatability
+	sed -i '' 's/^/;/' "${WORKINGDIR}base64.txt"								#Add gcode comment to ascii encoded lines
+else
+	sed -i 's/^/;/' "${WORKINGDIR}base64.txt"								#Add gcode comment to ascii encoded lines
+fi
+
 
 fn_logdebug "Merging thumbnail into gcode ...." 
 
